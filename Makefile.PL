@@ -22,7 +22,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
 	'NAME'		=> 'Data::ShowTable',
-	'VERSION'	=> '3.1',
+	'VERSION'	=> '3.3',
 	'EXE_FILES'	=> [ 'showtable' ],
 	'dist'		=> { COMPRESS => 'gzip',
 			     SUFFIX => '.gz', 

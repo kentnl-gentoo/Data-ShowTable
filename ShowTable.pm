@@ -17,7 +17,7 @@
 #    along with this program; if not, write to the Free Software
 #    Foundation, Inc., 675 Mass Ave, Cambridge, MA 02139, USA.
 #
-# $Id: ShowTable.pm,v 1.14 1997/02/12 07:47:41 aks Exp $
+# $Id: ShowTable.pm,v 1.20 1997/03/02 22:04:50 aks Exp $
 #
 
 package Data::ShowTable;
@@ -87,7 +87,7 @@ B<@Data_Formats> = ( I<fmt1_html>, <fmt2_html>, ... );
 
 B<ShowRow> I<$rewindflag>, I<\$index>, I<$col_array_1> [, I<$col_array_2>, ...;]
 
-I<$fmt> = B<ShowTableValue> I<$value>, I<$type>, I<$max_width>, I<$width>, I<$precision>;
+I<$fmt> = B<ShowTableValue> I<$value>, I<$type>, I<$max_width>, I<$width>, I<$precision>, I<$showmode>;
 
 [I<$plaintext> = ] B<PlainText> [I<$htmltext>];
 
@@ -186,7 +186,6 @@ $No_Escape        = '';		# escape by default
 @Data_Formats	  = ();
 
 use Carp;
-use Sys::OutPut;
 
 unshift(@INC, '.');
 
@@ -196,12 +195,15 @@ sub ShowColumns;
 sub ShowTable;
 sub ShowRow;
 sub PlainText;
+sub htmltext;
 
 sub get_params;
 sub html_formats;
 sub center;
 sub max_length;
 sub max;
+sub out;
+sub put;
 
 =head1 MODULES
 
@@ -593,7 +595,7 @@ sub ShowBoxTable {
 	@cell = ();
 	for ($c = 0; $c <= $#values; $c++) {
 	    $cell[$c] = &$fmt_sub($values[$c], $types->[$c], $max_widths->[$c],
-				  $widths->[$c], $precision->[$c]);
+				  $widths->[$c], $precision->[$c], 'box');
 	}
 	# second pass -- output each cell, wrapping if necessary
 	my $will_wrap;
@@ -694,7 +696,7 @@ sub ShowSimpleTable {
 	my @cell;
 	for ($c = 0; $c <= $#values; $c++) {
 	    $cell[$c] = &$fmt_sub($values[$c], $types->[$c], $max_widths->[$c],
-				  $widths->[$c], $precision->[$c]);
+				  $widths->[$c], $precision->[$c], 'table');
 	}
 	# second pass -- output each cell, wrapping if necessary
 	my $will_wrap;
@@ -719,21 +721,44 @@ S<  >B<ShowHTMLTable> { I<parameter> => I<value>, ... };
 
 S<  >B<ShowHTMLTable> I<\@titles>, I<\@types>, I<\@widths>, I<\&row_sub>
 [, I<\&fmt_sub> [, I<$max_width> [, I<\%URL_Keys> [, I<$no_escape> 
-[, I<\@title_formats [, I<\@data_formats ] ] ] ] ] ];
+[, I<\@title_formats [, I<\@data_formats [, I<$table_attrs> ] ] ] ] ] ] ];
 
 The B<ShowHTMLTable> displays one or more rows of columns of data using
 the HTML C<\<TABLE\>> feature.  In addition to the usual parameter arguments
-of L<"ShowTable">, the following parameter arguments are allowed:
+of L<"ShowTable">, the following parameter arguments are defined:
 
 =over 10
 
 =item C<url_keys> => I<\%URL_Keys>,
 
 This is a hash array of column names (titles) and corresponding base
-URLs.  The values of any columns occuring as keys in the hash array will
-be generated as hypertext anchors using the associated base URL and the
-column name and value as a querystring for the "I<col>" and "I<val>" 
-parameters, respectively.
+URLs.  The values of any column names or indexes occuring as keys in
+the hash array will be generated as hypertext anchors using the
+associated I<printf>-like string as the base URL. Either the column name
+or the column index (beginning with 1) may be used as the hash key.
+
+In the string value, these macros can be substituted:  
+
+"C<%K>" is replaced with the column name.
+
+"C<%V>" is replaced with the column value;
+
+"C<%I>" is replaced with the column index.
+
+For example, if we define the array:
+
+    $base_url = "http://www.$domain/cgi/lookup?col=%K?val=%V";
+    %url_cols = ('Author' => $base_url,
+		 'Name'   => $base_url);
+
+Then, the values in the C<Author> column will be generated with the following
+HTML text:
+
+    <A HREF="http://www.$domain/cgi/lookup?col=Author?val=somevalue>somevalue</A>
+
+and the values in the C<Name> column will be generated with the URL:
+
+    <A HREF="http://www.$domain/cgi/lookup?col=Name?val=othervalue>othervalue</A>
 
 If this variable is not given, it will default to the global variable
 C<\%URL_Keys>.
@@ -745,11 +770,18 @@ values in order to properly display the special HTML formatting
 characters : '\<', '\>', and '&'.  If you wish to display data with
 embedded HTML text, you must set B<$no_escape>.
 
-If the I<@titles> array is empty, no header row is generated.
+Enabling embedded HTML, turns on certain heuristics which enable the
+user to more completely define appearance of the table.  For instance,
+any C<\<TR\>> tokens found embedded *anywhere* within a row of data will
+be placed at the front of the row, within the generated C<\<TR\>>.
 
-=item C<title_formats> = I<\@title_formats>,
+Similarly, a row of data containing the C<\<THEAD\>> or C<\<TFOOT\>>
+tokens, and their closing counterparts, will begin and end, respectively
+a table header or footer data.
 
-=item C<tformats> = I<\@title_formats>,
+=item C<title_formats> => I<\@title_formats>,
+
+=item C<tformats> => I<\@title_formats>,
 
 An array of HTML formatting elements for the column titles, one for each
 column.  Each array element is a list of one or more HTML elements,
@@ -770,37 +802,35 @@ then the text output for the title of the first column would be:
 If C<title_formats> is omitted, the global variable B<@Title_Formats>
 is used by default.
 
-=item C<data_formats> = I<\@data_formats>,
+=item C<data_formats> => I<\@data_formats>,
 
-=item C<dformats> = I<\@data_formats>,
+=item C<dformats> => I<\@data_formats>,
 
 Similar to C<title_formats>, this array provides HTML formatting for
 the columns of each row of data.  If C<data_formats> is omitted or
 null, then the global variable B<\@Data_Formats> is used by default.
 
+=item C<table_attrs> => I<$table_attrs>,
+
+This variable defines a string of attributes to be inserted within the
+C<\<TABLE\>> token.  For example, if the user wishes to have no table
+border:
+
+    ShowHTMLTable { 
+	...
+    	table_attrs => 'BORDER=0', 
+        ...
+    };
+
 =back
-
-For example, if we define the array:
-
-    $base_url = "http://www.$domain/cgi/lookup";
-    %url_cols = ('Author' => $base_url,
-		 'Name'   => $base_url);
-
-Then, the values in the C<Author> column will be generated with the following
-HTML text:
-
-    <A HREF="http://www.$domain/cgi/lookup?col=Author?val=somevalue>somevalue</A>
-
-and the values in the C<Name> column will be generated with the URL:
-
-    <A HREF="http://www.$domain/cgi/lookup?col=Name?val=othervalue>othervalue</A>
 
 =cut
 
 sub ShowHTMLTable {
     my @argv = @_;
     local ($titles, $types, $col_widths, $row_sub, $fmt_sub, $max_width, 
-    	   $url_keys, $no_escape, $title_formats, $data_formats, $show_mode);
+    	   $url_keys, $no_escape, $title_formats, $data_formats, 
+	   $show_mode, $table_attrs);
     my $args = 
     	get_params 
 	    \@argv, 
@@ -814,11 +844,13 @@ sub ShowHTMLTable {
 	      no_escape     => \$no_escape,
 	      tformats 	    => \$title_formats,
 	      dformats      => \$data_formats,
+	      table_attrs   => \$table_attrs,
 	      data_formats  => 'tformats',
 	      title_formats => 'tformats',
 	    },
 	    [qw(titles types widths row_sub fmtsub max_width 
-	        url_keys no_escape title_formats data_formats)];
+	        url_keys no_escape title_formats data_formats
+		table_attrs)];
 
     $titles      ne ''  or croak "Missing column names array.\n";
     $types       ne ''  or croak "Missing column types array.\n";
@@ -852,10 +884,20 @@ sub ShowHTMLTable {
     ($dprefixes,$dsuffixes) = html_formats $data_formats  
     	if defined($data_formats) && $data_formats ne '';
 
-    out "<TABLE BORDER=1>\n<TR>" ;
+    if ($table_attrs) {			# any table attributes?
+	local($_) = $table_attrs;
+	$table_attrs .= ' BORDER=1'      unless /\bBORDER=/i;
+	$table_attrs .= ' CELLPADDING=1' unless /\bCELLPADDING=/i;
+	$table_attrs .= ' CELLSPACING=1' unless /\bCELLSPACING=/i;
+    } else {
+	$table_attrs = 'BORDER=2 CELLPADDING=1 CELLSPACING=1';
+    }
+	
+    out "<TABLE $table_attrs>\n<TR>" ;
     map { $total_width += defined($_) ? $_ : 0; } @$max_widths;
     for ($c = 0; $c < $num_cols; $c++) {
-	$width = $max_widths->[$c];
+	# If the user specified a width, then use it.
+	$width = defined($widths->[$c]) ? $widths->[$c] : $max_widths->[$c];
 	my $pct_width = int(100 * $width/$total_width);
 	$title_line .= " <TH ALIGN=CENTER WIDTH=$pct_width%%>";
 	if ($#$titles >= 0) {
@@ -872,7 +914,7 @@ sub ShowHTMLTable {
     out $title_line;
     out "</TR>";
 
-    my ($href, $val, $out);
+    my ($href, $key, $val, $out);
     while ((@values = &$row_sub(0)), $#values >= $[) {
 	out "<TR> ";
 	# Walk through the values
@@ -888,11 +930,32 @@ sub ShowHTMLTable {
 		    $out .= " ALIGN=RIGHT";
 		}
 		$out .= ">";
-		if ($#$titles >= 0 && 
-		    ($href = $url_keys->{&PlainText($titles->[$c])})) {
-		    $out .= sprintf("<A HREF=\"%s?col=%s?val=%s\">",$href,$titles->[$c],$val);
+		# Discover if either the column name or column index
+		# have been mapped to a URL.
+		$href = '';
+		foreach $key ( $#$titles >= 0 && &PlainText($titles->[$c]),
+				sprintf("%d", $c+1)) {
+		    next unless $key ne '' && defined($url_keys->{$key});
+		    $href = $url_keys->{$key};
+		    last;
 		}
-		$val = &$fmt_sub($val, $types->[$c], 0, $widths->[$c], $precision->[$c]);
+		if ($href ne '') {
+		    if ($href =~ /%K/) {
+			my $s = &htmltext(&PlainText($titles->[$c]), 1);
+			$href =~ s/%K/$s/g;
+		    }
+		    if ($href =~ /%V/) {
+			my $s = &htmltext($val, 1);
+			$href =~ s/%V/$s/g;
+		    }
+		    if ($href =~ /%I/) {
+			my $s = sprintf("%d", $c+1);
+			$href =~ s/%I/$s/g;
+		    }
+		    $out .= sprintf("<A HREF=\"%s\">",$href);
+		}
+		$val = &$fmt_sub($val, $types->[$c], 0, $widths->[$c], 
+				 $precision->[$c], 'html');
 		$val =~ s/^\s+//;		# don't try to align
 		$val =~ s/\s+$//;
 
@@ -986,6 +1049,7 @@ A long line can be continue by a null field (column):
 
     Field2: blah blah blah
           : blah blah blah
+
 =item *
 
 On a continuation, the null field is an arbitrary number of leading
@@ -1050,7 +1114,7 @@ sub ShowListTable {
 	    my $type  = $types->[$c];
 	    my $width = 0;
 	    my $prec  = $precision->[$c];
-	    $value = &$fmt_sub($values[$c], $type, 0, $width, $prec);
+	    $value = &$fmt_sub($values[$c], $type, 0, $width, $prec, 'list');
 	    while (length($value)) {
 		if (length($value) > ($cut = $col_limit)) {
 		    $line = substr($value, 0, $cut);
@@ -1143,7 +1207,7 @@ Prepare and return a formatted representation of a value.  A value
 argument, using its corresponding type, effective width, and precision
 is formatted into a field of a given maximum width. 
 
-S<  >I<$fmt> = B<ShowTableValue> I<$value>, I<$type>, I<$max_width>, I<$width>, I<$precision>;
+S<  >I<$fmt> = B<ShowTableValue> I<$value>, I<$type>, I<$max_width>, I<$width>, I<$precision>, I<$showmode>;
 
 =over 10
 
@@ -1186,6 +1250,12 @@ column in which this value occurs.
 
 The precision specification, if any, from the column width specification.
 
+=item I<$showmode>
+
+The mode of the output: one of "table", "list", "box", or "html".  Currently,
+only the "html" mode is significant: it is used to avoid using HTML tokens
+as part of the formatted text and length calculations.
+
 =back
 
 =cut
@@ -1196,6 +1266,7 @@ sub ShowTableValue {
     my $max_width = shift;
     my $width     = shift;
     my $prec      = shift || 2;
+    my $showmode  = shift;
     my $fmt       = ($Type2Format{lc($type)} || $Type2Format{'char'});
     my $str;
 
@@ -1220,6 +1291,14 @@ sub ShowTableValue {
 	}
     } else {
 	$fmt = sprintf ($fmt,$width,$prec);
+
+	# If we are in HTML mode, and the value has any HTML tokens,
+	# then format it always as a string (even if it might
+	# be a decimal--this is a kluge but seems to work).
+
+	if ($showmode =~ /html/i && $value =~ /<\/?($HTML_Elements)/) {
+	    $fmt =~ s/[df]/s/;	# convert to string sub
+	}
 	$str = sprintf($fmt,$value);
     }
     if ($width > length(&PlainText($str))) {
@@ -1275,11 +1354,11 @@ sub PlainText {
     return $_ unless m=</?($HTML_Elements)=i;	# HTML text?
     s{</?(?:$HTML_Elements)#		# match and remove any HTML token..
 	 (?:\ \w+#			# ..then PARAM or PARAM=VALUE
-	     (?:\=(?:"(?:[^"]*|\\")*"|#	# ...."STRING" or..
-		    [^"> ]*#		# ....VALUE
+	     (?:\=(?:"(?:[^"]|\\")*"|#	# ...."STRING" or..
+		    [^"> ]+#		# ....VALUE
 		 )#
 	     )?#			# ..=VALUE is optional
-	 )*#				# one or more PARAM or PARAM=VALUE
+	 )*#				# zero or more PARAM or PARAM=VALUE
       >}{}igx;				# up to the closing '>'
     $_;					# return the result
 }
@@ -1448,8 +1527,12 @@ sub get_params {
 
 BEGIN {
 
-# A table of parameters used by all the external subroutines
+# A table of parameters used by all the external subroutines For
+# example, in order for parameters applicable to ShowHTMLTable to be
+# passed through ShowTable, they need to be defined in this table.
+
 @show_table_params = qw(
+	caption
 	col_attributes
 	col_lengths
 	col_names
@@ -1463,6 +1546,7 @@ BEGIN {
 	no_escape
 	row_sub
 	show_mode
+	table_attrs
 	tformats
 	title_formats
 	titles
@@ -1753,11 +1837,12 @@ sub calc_widths {
 		# default widths
 		$value = 
 		    # If a fmt_sub is available, use it to format the value
-		    $fmt_sub ? &$fmt_sub($values[$c], $types->[$c], 0, 0, $precision[$c])
-		    	     # otherwise, if we're in "html" mode, get plaintext
-		     	     : length($showmode eq 'html' ? &PlainText($values[$c]) 
-							  # else, use raw text
-							  : $values[$c]);
+		    $fmt_sub ? 
+			&$fmt_sub($values[$c], $types->[$c], 0, 0, $precision[$c], $showmode)
+			# If no fmt sub, then use Perl stringify
+		        : length($showmode eq 'html' ?  # in HTML mode?
+				&PlainText($values[$c]) # use plain text
+			        : $values[$c]); 	# else, use raw text
 		$len = length($value);
 
 		$max_widths[$c] = $len if 
@@ -1994,25 +2079,67 @@ sub max_length {
     $maxlen;
 }
 
+##############################
+
 =head1 htmltext
 
 Translate regular text for output into an HTML document.  This means
 certain characters, such as "&", ">", and "<" must be escaped. 
 
-S<  >I<$output> = B<&htmltext>( I<$input> );
+S<  >I<$output> = B<&htmltext>( I<$input> [, I<$allflag> ] );
+
+If I<$allflag> is non-zero, then all characters are escaped.  Normally,
+only the four HTML syntactic break characters are escaped.
 
 =cut
 
 # htmltext -- translate special text into HTML esacpes
 sub htmltext {
-    local($_) = @_;
+    local($_) = shift;
+    my $all = shift;
     return undef unless defined($_);
-    s/&/&amp;/g; 
+    s/&(?!(?:amp|quot|gt|lt|#\d+);)/&amp;/g; 
     s/\"/&quot;/g;
     s/>/&gt;/g;
-    s/</&lt;/g;
+    s/</\&lt;/g;
+    if ($all) {
+	s/ /\&#32;/g;
+	s/\t/\&#09;/g;
+    }
     $_;
 }
+
+##############################
+
+=head1 out
+
+Print text followed by a newline.
+
+S<  >B<out> I<$fmt> [, I<@text> ];
+
+=cut
+
+sub out {
+    my $fmt = shift;
+    $fmt .= "\n" unless $fmt =~ /\n$/;
+    printf STDOUT $fmt, @_;
+}
+
+##############################
+
+=head1 put
+
+Print text (without a trailing newline).
+
+S<  >B<out> I<$fmt> [, I<@text> ];
+
+=cut
+
+sub put {
+    printf STDOUT @_;
+}
+
+##############################
 
 =head1 AUTHOR
 
@@ -2026,10 +2153,9 @@ Alan K. Stebbens <aks@sgi.com>
 
 =item *
 
-Currently, there is no way to specify vertical or horizontal alignment
-on an individual HTML table cell, only on a per-column basis.
-Generally, the HTML formatting techniques have not been given much
-consideration -- feel free to provide constructive feedback.
+Embedded HTML is how the user can insert formatting overrides.  However,
+the HTML formatting techniques have not been given much consideration --
+feel free to provide constructive feedback.
 
 =cut
 

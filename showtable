@@ -35,7 +35,7 @@
 #
 # If no file is given, STDIN is used by default.
 #
-# $Id: showtable,v 1.15 1997/02/12 07:45:46 aks Exp $
+# $Id: showtable,v 1.17 1997/02/26 03:15:48 aks Exp $
 # $Source: /usr/cvsroot/perl/Data-ShowTable/showtable,v $
 #
 # Author: Alan K. Stebbens
@@ -49,13 +49,18 @@ unshift(@INC,'.');
 unshift(@INC,'blib/lib') if -d 'blib/lib';	# for testing
 
 use Data::ShowTable;
-use Sys::OutPut;
 
 sub ShowData;
 sub ReadTableInput;
 sub ReadListInput;
 sub NextRow;
 sub max;
+
+sub err {
+    my $fmt = shift;
+    $fmt .= "\n" unless $fmt =~ /\n$/;
+    printf STDERR $fmt,@_;
+}
 
 sub usage {
     err @_ if $#_ >= 0;
@@ -83,9 +88,6 @@ Options affecting input:
   -nos(trip)	Don't strip blanks around the column values.
   -i(nput)=TYPE	Set the input type; currently TYPE can be "list", "box", 
   		"table", or "simple".  Default is "box".
-  -noe(scape)	Do not perform HTML escape sequences; this will allow
-		data with embedded HTML to be displayed properly.  Implies
-		the -html option.
 
 The options controlling the output are:
   -s(imple)	use a simple table format (without wrapped columns)
@@ -108,13 +110,24 @@ The options controlling the output are:
   -fN1,N2...	select fields to display by index; N-M is a range of fields.
   -fields=Name1, Name2, ...
 		select fields to display by names.
+  -h(elp)	Display this string.
+
+HTML-only options (their usage implies -html):
+  -noe(scape)	Do not perform HTML escape sequences; this will allow
+		data with embedded HTML to be displayed properly.  Implies
+		the -html option.
+  -attr(ibutes)='attr1 attr2 ...'
+		Define the table attributes, which get inserted into the
+		<TABLE> token.
   -t(itle)f(ormats)=fmt1;fmt2;...;fmtN
 		Define the HTML formats for the titles.  
 		Implies -html.
   -d(ata)f(ormats)=fmt1;fmt2;...;fmtN
 		Define the HTML formats for the data values in each column.
 		Implies -html.
-  -h(elp)	Display this string.
+  -url(s)=col1=url1,col2=url2,...
+		Define the URL mappings for given column names.  Multiple
+		-url options may be given.
 EOF
     exit;
 }
@@ -123,6 +136,7 @@ $break_str = "\t";		# tab for default break str
 $Titles = 0;			# assume no input titles
 $#Titles = -1;			# assume no output titles
 @Fields = ();			# no explicit field selections
+%URLs = ();			# no URLs initially
 
 $InputType = '';
 $Strip_Spaces = '';
@@ -224,6 +238,23 @@ while ($_ = shift(@ARGV)) {
 		usage "$PROG: bad HTML format element '%s'", $_;
 	    }
 	    push(@Dformats,@dformats);		# allow multiple options
+	    $Show_Mode = 'HTML';
+	} elsif (!index('-urls',$_)) {
+	    # parse COL1=URL1,COL2=URL2,...
+	    #   or: COL1:URL1,COL2:URL2,...
+	    my @urldefs = split(/[,|]/, $value);	# get the different URLs
+	    my $urldef;
+	    foreach $urldef (@urldefs) {
+		my ($col, $url) = split(/[=:]/,$urldef,2);
+		if ($col ne '' && $url ne '') {	# both defined?
+		    $URLs{$col} = $url;		# save the mapping
+		} elsif ($col ne '' || $url ne '') {
+		    usage "$PROG: bad URL format element: '%s'", $urldef;
+		}
+	    }
+	    $Show_Mode = 'HTML';		# make sure
+	} elsif (!index('-attributes',$_)) {
+	    $table_attributes .= ' '.$value;	# build up the list
 	    $Show_Mode = 'HTML';
 	} else {
 	    usage "$PROG: Unknown option: $_";
@@ -415,8 +446,10 @@ sub ShowData {
 	  widths	=> \@Widths,
 	  row_sub	=> $theRowSub,
 	  no_escape	=> $No_Escape,
+	  table_attrs	=> $table_attributes,
 	  tformats	=> \@Tformats,
 	  dformats	=> \@Dformats,
+	  url_keys	=> \%URLs,
 	};
 }
 
@@ -632,11 +665,6 @@ Do not ignore lines of separators, such as dashes, equal
 signs, or underlines.  If B<-nodashes> is given, and these lines do occur
 in the stream, they will be treated as normal data.
 
-=item B<-noe(scape)>
-
-Do not perform HTML escape sequences on the data; this allows embedded
-HTML text in the data to be displayed properly with the B<-html> option.
-
 =item B<-ti(tles)[=>I<NN>B<]>
 
 Treat the first I<NN> rows of data as column titles; multiple
@@ -743,6 +771,32 @@ Example: To set the maximum width of the third column to 20 characters:
 
     -cw=,,20
 
+=back
+
+=head2 B<HTML-only options> (the usage of which implies B<-html>)
+
+=over 10
+
+=item B<-noe(scape)>
+
+Do not perform HTML escape sequences on the data; this allows embedded
+HTML text in the data to be displayed properly with the B<-html> option.
+
+=item B<-attributes>='I<attr1> I<attr2> ...'
+
+Declare the table attributes, which are inserted into the C<TABLE>
+token.  For example, the option:
+
+    -attributes='BORDER=0 CELLSPACING=2 CELLPADDING=4'
+
+would cause the following HTML:
+
+    <TABLE BORDER=0 CELLSPACING=2 CELLPADDING=4>
+
+The default table attributes are:
+
+    <TABLE BORDER=1 CELLSPACING=1 CELLPADDING=1>
+
 =item B<-t(itle)_f(ormats)>=I<fmt1>;I<fmt2>;...;I<fmtN>
 
 Set the HTML formats for the column titles.  The B<-title_formats> (or
@@ -763,6 +817,27 @@ and the third italic in a smaller font:
 =item B<-d(ata)_f(formats)>=I<fmt1>;I<fmt2>;...;I<fmtN>
 
 The same as B<-title_formats> but applies to the column data.
+
+=item B<-url(s)=I<col1>=I<url1>,I<col2>=I<url2>,...>
+
+Define a mapping from column names, or indexes, to URLs to be inserted
+as <A HREF's> around the values for the named columns.  Each I<colN> is
+a column name or index, and each I<urlN> is a string representing the
+URL to be inserted for the given column.
+
+The URL text may contain these substitution strings:
+
+B<%K> - will be substituted with the current column name (or I<key>). 
+
+B<%V> - will be substituted with the current column value.
+
+Multiple B<-url> options may be given, if desired, rather than
+creating one long argument for a single B<-url>.  For example:
+
+    showtable	-d: -f1,6 -titles=Login,Homedir \
+		-url='Login=mailto:%V' \
+		-url='HomeDir=file:%V' \
+	   	/etc/passwd
 
 =back
 
@@ -852,10 +927,6 @@ correctly.
 =item B<Data::ShowTable> module
 
 Performs the actual output formatting.
-
-=item B<Sys::OutPut> module
-
-Used for output to C<STDOUT> and C<STDERR>.
 
 =back
 
