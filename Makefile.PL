@@ -1,6 +1,6 @@
 # Makefile for ShowTable.pm
 #
-#    Copyright (C) 1996,1997  Alan K. Stebbens <aks@sgi.com>
+#    Copyright (C) 1996-2013 Alan K. Stebbens <aks@stebbens.org>
 #
 #    This program is free software; you can redistribute it and/or modify
 #    it under the terms of the GNU General Public License as published by
@@ -22,8 +22,11 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
 	'NAME'		=> 'Data::ShowTable',
-	'VERSION'	=> '3.3',
+	'VERSION'	=> '4.1',
+	'ABSTRACT'      => 'Perl module to automatically format columnar data.',
+	'AUTHOR'	=> ['Alan Stebbens <aks@stebbens.org>'],
 	'EXE_FILES'	=> [ 'showtable' ],
+	'LICENSE'	=> 'gpl',
 	'dist'		=> { COMPRESS => 'gzip',
 			     SUFFIX => '.gz', 
 			   },
