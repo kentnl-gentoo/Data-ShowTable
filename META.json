@@ -4,7 +4,7 @@
       "Alan Stebbens <aks@stebbens.org>"
    ],
    "dynamic_config" : 1,
-   "generated_by" : "ExtUtils::MakeMaker version 6.66, CPAN::Meta::Converter version 2.112621",
+   "generated_by" : "ExtUtils::MakeMaker version 6.68, CPAN::Meta::Converter version 2.131560",
    "license" : [
       "open_source"
    ],
@@ -22,12 +22,12 @@
    "prereqs" : {
       "build" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : 0
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "configure" : {
          "requires" : {
-            "ExtUtils::MakeMaker" : 0
+            "ExtUtils::MakeMaker" : "0"
          }
       },
       "runtime" : {
@@ -35,5 +35,5 @@
       }
    },
    "release_status" : "stable",
-   "version" : "4.1"
+   "version" : "4.2"
 }
