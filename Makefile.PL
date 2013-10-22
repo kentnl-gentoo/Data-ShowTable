@@ -22,7 +22,7 @@ use ExtUtils::MakeMaker;
 
 WriteMakefile(
 	'NAME'		=> 'Data::ShowTable',
-	'VERSION'	=> '4.2',
+	'VERSION'	=> '4.3',
 	'ABSTRACT'      => 'Perl module to automatically format columnar data.',
 	'AUTHOR'	=> 'Alan Stebbens <aks@stebbens.org>',
 	'EXE_FILES'	=> [ 'showtable' ],
