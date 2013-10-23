@@ -21,13 +21,13 @@ require 5.002;
 use ExtUtils::MakeMaker;
 
 WriteMakefile(
-	'NAME'		=> 'Data::ShowTable',
-	'VERSION'	=> '4.3',
-	'ABSTRACT'      => 'Perl module to automatically format columnar data.',
-	'AUTHOR'	=> 'Alan Stebbens <aks@stebbens.org>',
-	'EXE_FILES'	=> [ 'showtable' ],
-	'LICENSE'	=> 'gpl',
-	'dist'		=> { COMPRESS => 'gzip',
+	NAME		=> 'Data::ShowTable',
+        VERSION_FROM    => 'ShowTable.pm',
+	ABSTRACT        => 'Perl module to automatically format columnar data.',
+	AUTHOR	        => 'Alan Stebbens <aks@stebbens.org>',
+	EXE_FILES	=> [ 'showtable' ],
+	LICENSE	        => 'gpl',
+	dist		=> { COMPRESS => 'gzip',
 			     SUFFIX => '.gz', 
 			   },
     );
