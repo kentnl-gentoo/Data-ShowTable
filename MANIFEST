@@ -1,26 +1,16 @@
 bump-version
 Changes
 Copyright
-Data-ShowTable-2.2.html
-Data-ShowTable-2.3.html
-Data-ShowTable-3.1.html
-Data-ShowTable-3.3.html
-Data-ShowTable-4.0.html
-Data-ShowTable-4.1.html
-Data-ShowTable-4.1.tar.gz
-Data-ShowTable-4.2.tar.gz
-Data-ShowTable-4.3.tar.gz
 gen-html
 gen-tests
 GNU-LICENSE
 Makefile.PL
 MANIFEST
+MYMETA.json
+MYMETA.yml
+pm_to_blib
 README
 showtable
-showtable-3.1.html
-showtable-3.3.html
-showtable-4.0.html
-showtable-4.1.html
 ShowTable.pm
 t/box-calls.t
 t/box-scaling.t
@@ -217,7 +207,7 @@ t/wrap.pl
 test.pl.off
 testfile
 testfile.lst
+testfile.pm
 testfile.tabs
-update-public
 META.yml                                 Module YAML meta-data (added by MakeMaker)
 META.json                                Module JSON meta-data (added by MakeMaker)

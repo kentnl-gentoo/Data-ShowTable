@@ -1,5 +1,5 @@
 #!/usr/bin/env perl
-# bump-version [-n] [-l] [-V VERSION] file ...
+# bump-version [options] [VERSION] file ...
 #
 # read one or more files and increment the given version
 
@@ -9,14 +9,14 @@ $VERSION = '0.1';
 
 =head1 USAGE
 
-bump-version [-n] [-l] [VERSION] file ...
+bump-version [options] [VERSION] file ...
 
 =head1 DESCRIPTION
 
 The C<bump-version> script increments the version number in the 
 given file.
 
-If VERSION is given, it must be in the format of "<num>.<num>".
+If VERSION is given, it must be in the format of "C<num.num>".
 
 Use the C<--list> option to see which files have a VERSION string.
 
@@ -28,9 +28,17 @@ Use the C<--list> option to see which files have a VERSION string.
 
 List the files that reference version numbers.
 
-=item C<--man, -m>
+=item C<--man>
 
 Show the entire man page.
+
+=item C<--major, -M>
+
+Bump the major version
+
+=item C<--minor, -m>
+
+Bump the minor version
 
 =item C<--verbose, -v>
 
@@ -141,9 +149,11 @@ sub update_version($) {
       talkf "%03d: %s", $., $_ if $verbose > 1;
       if (/^(\s*)\$VERSION\s*=\s*['"]?(\d+)\.(\d+)['"]?[\s;]/) {
         my ($prefix, $cur_major, $cur_minor) = ($1, $2, $3);
+        talkf "%20s: ", $file if $many_files && !$verbose;
         talkf "Found version: %s.%s\n", $cur_major, $cur_minor;
         ($new_major, $new_minor) = bump_version($cur_major, $cur_minor);
         if ($new_major ne $cur_major or $new_minor ne $cur_minor) {
+          talkf "%20s: ", $file if $many_files && !$verbose;
           talkf "  New version: %s.%s\n", $new_major, $new_minor;
           $_ = sprintf("%s\$VERSION = '%s.%s';\n", $prefix, $new_major, $new_minor);
           $changes = 1;
@@ -202,10 +212,14 @@ sub bump_version($$) {
 GetOptions('verbose|v+'  => \$verbose,
            'help|h'      => sub { pod2usage(1); },
            'list|l'      => \$list,
-           'man|m'       => sub { pod2usage(-exitval => 0, -verbose => 2); },
+           'man'         => sub { pod2usage(-exitval => 0, -verbose => 2); },
+           'major|M'     => \$bump_major,
+           'minor|m'     => \$bump_minor,
            'norun|n'     => \$norun,
            'version|V'   => sub { VersionMessage(); }
           ) or pod2usage(2);
+
+$bump_minor = '' if $bump_major;
 
 chomp($out = `echo Makefile.PL README* *.pm`);
 @files = split(' ', $out);
@@ -235,6 +249,8 @@ if ($#ARGV >= 0) {
 $#ARGV >=0 or pod2usage(1);
 
 # process each file argument
+
+$many_files = 1 if $#ARGV > 0;
 
 foreach my $file (@ARGV) {
   update_version($file);
