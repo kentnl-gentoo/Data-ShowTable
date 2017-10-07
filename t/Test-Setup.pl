@@ -1,11 +1,11 @@
 #!/usr/bin/env perl
 
 use Carp;
-
+use File::Temp qw( tempdir );
 ($DIR,$PROG) = $0 =~ m=^(.*/)?([^/]+)$=;
 $DIR =~ s=/$== || chop($DIR = `pwd`);
 
-$testdir = -d 't' ? 't' : '.';
+$testdir = tempdir( 'temp.XXXX', DIR => ( -d 't' ? 't' : '.' ), CLEANUP => 1);
 
 # Setup these globals
 
