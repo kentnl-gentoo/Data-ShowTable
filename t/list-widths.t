@@ -25,4 +25,4 @@ $what = "t/$what" if -d "t" && !-r "$what.pl";
 unshift(@INC,'../blib/lib') if -d '../blib/lib';
 unshift(@INC,'t') if -d 't';
 
-do "$what.pl";
+require "./$what.pl";
